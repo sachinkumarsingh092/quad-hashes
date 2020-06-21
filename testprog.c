@@ -6,8 +6,19 @@
 #include <gnuastro/table.h>
 #include <gnuastro/statistics.h>
 
+double
+deg2rad(double degree)
+{
+  double pi = 3.14159; 
+  return(degree * (pi/180));
+}
+
+
 
 int main(){
+    size_t i;
+    long nside, ipring;
+    double theta, phi;
 
     /* Choose columns to read. */
     gal_list_str_t *cols=NULL;
@@ -26,8 +37,6 @@ int main(){
     gal_data_t *dec=gal_data_copy_to_new_type (ref->next, GAL_TYPE_FLOAT64);
     gal_data_t *mag=gal_data_copy_to_new_type (ref->next->next, GAL_TYPE_FLOAT32);
 
-    /* Free refernce data. */
-    gal_list_data_free (ref);
 
     /* Find range. */
     gal_data_t *ra_min=gal_statistics_minimum (ra);
@@ -41,12 +50,33 @@ int main(){
     double *min_c1=ra_min->array;
     double *max_c1=ra_max->array;
 
-    /* Make a healpix of the magnitude data. */
-    write_healpix_map(c3, 2, "healpix-test.fits", 0, "C");
+    for(i=0; i<ref->dsize[0]; ++i)
+      {
+        double ptheta = deg2rad(90-c2[i]);
+        double pphi   = deg2rad(c1[i]);
 
-    printf("%lf %lf\n", min_c1[0], max_c1[0]);
+        ang2pix_ring(2, ptheta, pphi, &ipring);
+        printf("ring = %ld\n", ipring);
+      }
+
+
+
+    for(i=0; i<14; ++i)
+      {
+        pix2ang_ring(2, i+1, &theta, &phi);
+        printf("theta = %lf, phi = %lf\n", theta, phi);
+      }
+
+    /* Make a healpix of the magnitude data. */
+    // write_healpix_map(c3, 4, "healpix-test.fits", 0, "C");
+
+    // printf("%lf %lf\n", min_c1[0], max_c1[0]);
 
     printf("%lf %lf %f\n", c1[0], c2[0], c3[0]);
+
+
+    /* Free refernce data. */
+    gal_list_data_free (ref);
 
     return 0;
 }
