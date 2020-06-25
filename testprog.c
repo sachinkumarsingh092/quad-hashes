@@ -13,12 +13,23 @@ deg2rad(double degree)
   return(degree * (pi/180));
 }
 
-
+struct Map
+{
+  size_t size;
+  size_t object_id[5];
+};
 
 int main(){
     size_t i;
-    long nside, ipring;
+    long nside=34, ipring;
     double theta, phi;
+    struct Map *most_bright;
+    size_t total_objects=50000; /* Total objects in the index catalog for HEALPix map*/
+
+    /* Allocate the columns in the map whcih is same as
+       total no of HEALpixes. */
+    most_bright=malloc(total_objects*sizeof(most_bright));
+
 
     /* Choose columns to read. */
     gal_list_str_t *cols=NULL;
@@ -50,22 +61,45 @@ int main(){
     double *min_c1=ra_min->array;
     double *max_c1=ra_max->array;
 
+    /* Allocate size for most bright array containing
+       5 most brightest start brightness where index of array is
+       the ring index no. of the HEALPix. */
+
     for(i=0; i<ref->dsize[0]; ++i)
       {
         double ptheta = deg2rad(90-c2[i]);
         double pphi   = deg2rad(c1[i]);
 
-        ang2pix_ring(2, ptheta, pphi, &ipring);
-        printf("ring = %ld\n", ipring);
+        ang2pix_ring(nside, ptheta, pphi, &ipring);
+        // printf("ring = %ld\n", ipring);
+
+        if(most_bright[ipring].size < 5)
+          {
+            most_bright[ipring].object_id[most_bright[ipring].size] = i;
+
+            printf("ring-index = %ld size = %ld , object-index = %ld \n", ipring, most_bright[ipring].size,
+                            most_bright[ipring].object_id[most_bright[ipring].size]);
+
+            most_bright[ipring].size++; /* Increase the size of the array. */
+          }
       }
 
+    // for(i=0; i<3921; ++i)
+    //   {
+    //     printf("ring-index = %ld\t", i);
+    //     for(size_t j=0; j<5; ++j)
+    //     {
+    //       printf("object-ids[%ld] = %ld ", j, most_bright[i].object_id[j]);
+    //     }
+    //     printf("\n");
+    //   }
 
 
-    for(i=0; i<14; ++i)
-      {
-        pix2ang_ring(2, i+1, &theta, &phi);
-        printf("theta = %lf, phi = %lf\n", theta, phi);
-      }
+    // for(i=0; i<12; ++i)
+    //   {
+    //     pix2ang_ring(2, i+1, &theta, &phi);
+    //     printf("theta = %lf, phi = %lf\n", theta, phi);
+    //   }
 
     /* Make a healpix of the magnitude data. */
     // write_healpix_map(c3, 4, "healpix-test.fits", 0, "C");
@@ -77,6 +111,7 @@ int main(){
 
     /* Free refernce data. */
     gal_list_data_free (ref);
+    free(most_bright);
 
     return 0;
 }
