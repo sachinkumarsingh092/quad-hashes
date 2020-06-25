@@ -20,6 +20,6 @@ magnitude_column = table_data['SIGNAL']
 # print(magnitude_column)
 # print(repr(hdr))
 
-hp.mollview(magnitude_column)
+hp.mollzoom(magnitude_column)
 hp.graticule()
 plt.show()

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 
 #include <chealpix.h>
@@ -7,12 +8,12 @@
 #include <gnuastro/table.h>
 #include <gnuastro/statistics.h>
 
-double
-deg2rad(double degree)
-{
-  double pi = 3.14159;
-  return(degree * (pi/180));
-}
+
+
+# define M_PI		    3.14159265358979323846	/* Somehow M_PI is not working. */
+# define DEG2RAD(d) (d)*M_PI/180
+
+
 
 struct Map
 {
@@ -20,18 +21,15 @@ struct Map
   size_t object_id[5];
 };
 
+
 int main(){
-    size_t i;
-    long nside=10, ipring;
+    size_t i=0, k=0;
     double theta, phi;
-    struct Map *most_bright;
-    size_t total_objects=50000; /* Total objects in the index catalog for HEALPix map*/
+    float *signal=NULL;
+    long nside=10, ipring;
     size_t *objectid_arr=NULL;
+    struct Map *most_bright=NULL;
 
-
-    /* Allocate the columns in the map whcih is same as
-       total no of HEALpixes. */
-    most_bright=malloc(total_objects*sizeof(most_bright));
 
 
     /* Choose columns to read. */
@@ -52,13 +50,13 @@ int main(){
     gal_data_t *mag=gal_data_copy_to_new_type (ref->next->next, GAL_TYPE_FLOAT32);
 
 
-    /* Find range. */
-    gal_data_t *mag_max=gal_statistics_maximum (mag);
+    /* Check range. */
+    /* gal_data_t *mag_max=gal_statistics_maximum (mag);
     gal_data_t *mag_min=gal_statistics_minimum (mag);
 
     float *max_c3=mag_max->array;
     float *min_c3=mag_min->array;
-
+    */
 
     /* Make an array of the columns. */
     double *c1=ra->array;
@@ -66,10 +64,19 @@ int main(){
     float  *c3=mag->array;
 
 
+
+    /* Allocate the columns in the map whcih is same as
+       total no of HEALpixes. */
+    most_bright=malloc(ref->dsize[0]*sizeof(*most_bright));
+
+    /* Allocate signal array. */
+    signal=malloc(ref->dsize[0]*sizeof(*most_bright));
+
     /* Allocate object id array and initialize. */
-    objectid_arr=malloc(ref->dsize[0]*sizeof(objectid_arr));
+    objectid_arr=malloc(ref->dsize[0]*sizeof(*objectid_arr));
     for(i=0;i<ref->dsize[0]; ++i)
       objectid_arr[i]=i;
+
 
 
     /* Use brightness column as a reference to sort object id array
@@ -86,27 +93,30 @@ int main(){
        the ring index no. of the HEALPix and the value is the size/index
        of the columns and their value at that size/index */
 
-    for(i=0; i<ref->dsize[0]; ++i)
+    for(i=0, k=0; i<ref->dsize[0]; ++i)
       {
-        double ptheta = deg2rad(90-c2[objectid_arr[i]]);
-        double pphi   = deg2rad(c1[objectid_arr[i]]);
+        double ptheta = DEG2RAD(90-c2[objectid_arr[i]]);
+        double pphi   = DEG2RAD(c1[objectid_arr[i]]);
 
         ang2pix_ring(nside, ptheta, pphi, &ipring);
         // printf("ring = %ld\n", ipring);
+
 
         if(most_bright[ipring].size < 5)
           {
             most_bright[ipring].object_id[most_bright[ipring].size] = i;
 
-            printf("ring-index = %ld, size = %ld, object-index = %ld \n",
-                                    ipring
-                                    , most_bright[ipring].size+1
-                                    , most_bright[ipring].object_id[most_bright[ipring].size]);
+            if(most_bright[ipring].size == 0)
+              signal[k++]=(float)ipring;
+
+            // printf("ring-index = %ld, size = %ld, object-index = %ld \n",
+            //                         ipring
+            //                         , most_bright[ipring].size+1
+            //                         , most_bright[ipring].object_id[most_bright[ipring].size]);
 
             most_bright[ipring].size++; /* Increase the size of the array. */
           }
       }
-
 
 
     /* To check the full columns and row values. */
@@ -132,17 +142,16 @@ int main(){
     */
 
 
-    /* Make/Write a healpix of the magnitude data. */
-    // write_healpix_map(c3, 4, "healpix-test.fits", 0, "C");
-
-
-    printf("%lf %lf %f\n", c1[0], c2[0], c3[0]);
+    /* Make/Write a healpix of the magnitude data. Interpolates
+       missing values. */
+    write_healpix_map(signal, nside, "healpix-test.fits", 0, "C");
 
 
     /* Free refernce data. */
     free(objectid_arr);
-    gal_list_data_free (ref);
+    free(signal);
     free(most_bright);
+    gal_list_data_free (ref);
 
     return 0;
 }
