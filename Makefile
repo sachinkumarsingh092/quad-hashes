@@ -8,7 +8,7 @@ LIBS := /usr/local/lib/libgnuastro.so.10  /usr/local/lib/libwcs-7.1.a \
 	/usr/local/lib/libcfitsio.so.8 /usr/local/lib/libchealpix.so -lm
 PROGNAME := testprog
 SHELL := /usr/bin/env bash
-
+REGION := 
 
 
 compile: ${PROGNAME}.c
@@ -16,7 +16,10 @@ compile: ${PROGNAME}.c
 	then				\
 	    rm healpix-test.fits;	\
 	fi;				\
-	${CC} ${CFLAGS} ${PROGNAME}.c ${INCLUDES} -o ${PROGNAME} -pthread ${LIBS} && ./${PROGNAME}
+	${CC} ${CFLAGS} $< ${INCLUDES} -o ${PROGNAME} -pthread ${LIBS} && ./${PROGNAME}
 
 plot: 
 	python3 scripts/plot.py
+
+ds9: ${REGION} 
+	ds9 test-pv.fits -zscale -zoom to fit -regions $< 

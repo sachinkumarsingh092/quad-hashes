@@ -1,3 +1,4 @@
 *.fits
 testprog
 a.out
+*.reg
