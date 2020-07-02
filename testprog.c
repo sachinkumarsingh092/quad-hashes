@@ -49,7 +49,7 @@ create_healpixmap(double *ra,
   /* Allocate the arrays to use the ordinnds arry to store the
      indexes and the temp_polygon array to store the points
      to be sorted while sorting the polygons. */
-  ordinds=malloc(2*ntop_objects*sizeof(*ordinds));
+  ordinds=malloc(ntop_objects*sizeof(*ordinds));
   temp_polygon=malloc(2*ntop_objects*sizeof(*temp_polygon));
 
   /* Allocate the columns in the map whcih is same as
@@ -112,16 +112,17 @@ create_healpixmap(double *ra,
         size_t ii = most_bright[i].object_id[j];
         temp_polygon[j*2]=ra[ii];
         temp_polygon[j*2+1]=dec[ii];
-        // printf("\t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
+        printf("temp_polygon = \t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
       }
 
       gal_polygon_vertices_sort(temp_polygon, ntop_objects, ordinds);
 
       for(j=0; j<ntop_objects; ++j)
       {
+        printf("ordinds %zu\n", ordinds[j]);
         polygon[k*2]=temp_polygon[ordinds[j]*2];
         polygon[k*2+1]=temp_polygon[ordinds[j]*2+1];
-        printf("polygon = %f, %f\n", polygon[k*2], polygon[k*2+1]);
+        printf("sorted polygon = %f, %f\n", temp_polygon[ordinds[j]*2], temp_polygon[ordinds[j]*2+1]);
         k++;
       }
     }
