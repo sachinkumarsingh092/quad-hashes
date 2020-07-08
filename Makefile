@@ -16,13 +16,18 @@ REGION :=
 
 compile: ${PROGNAME}.c
 	if [[ -a healpix-test.fits ]];  \
-	then				\
-	    rm healpix-test.fits;	\
-	fi;				\
+	then							\
+	    rm healpix-test.fits;		\
+	fi;								\
 	${CC} ${CFLAGS} $< ${INCLUDES} -o ${PROGNAME} ${LIBS} && ./${PROGNAME}
 
 plot:
 	python3 scripts/plot.py
 
 ds9: ${REGION}
-	ds9 test-pv.fits -zscale -zoom to fit -regions $< 
+	if [[ ! -a polygon.reg ]];  \
+	then						\
+	    touch polygon.reg;		\
+	fi;							\
+	cat $< | uniq > polygon.reg 
+	ds9 test-pv.fits -zscale -zoom to fit -regions polygon.reg
