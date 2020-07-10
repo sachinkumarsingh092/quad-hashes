@@ -24,10 +24,5 @@ compile: ${PROGNAME}.c
 plot:
 	python3 scripts/plot.py
 
-ds9: ${REGION}
-	if [[ ! -a polygon.reg ]];  \
-	then						\
-	    touch polygon.reg;		\
-	fi;							\
-	cat $< | uniq > polygon.reg 
-	ds9 test-pv.fits -zscale -zoom to fit -regions polygon.reg
+ds9:
+	ds9 test-pv.fits -zscale -zoom to fit -regions ${REGION}.reg
