@@ -91,36 +91,11 @@ create_healpixmap(double *ra,
                   float *signal)
 {
   long ipring;
-  // float *signal=NULL;
   size_t *ordinds=NULL;
   size_t i=0, j=0, k=0;
   double *temp_polygon=NULL;
   size_t *objectid_arr=NULL;
-  // struct Map *most_bright=NULL;
 
-
-  /* Allocate the arrays to use the ordinnds arry to store the
-     indexes and the temp_polygon array to store the points
-     to be sorted while sorting the polygons. */
-  // ordinds=malloc(col_size*ntop_objects*sizeof(*ordinds));
-
-  // temp_polygon=malloc(col_size*2*ntop_objects*sizeof(*temp_polygon));
-
-  // /* Allocate the columns in the map whcih is same as
-  //     total no of HEALpixes. */
-  // most_bright=malloc(col_size*sizeof(*most_bright));
-
-  // for(i=0;i<col_size;i++)
-  //   {
-  //     for(j=0;j<ntop_objects;j++)
-  //           most_bright[i].object_id[j]=0;
-
-  //     most_bright[i].size=0;
-  //   }
-
-
-  // /* Allocate signal array. */
-  // signal=malloc(col_size*sizeof(*signal));
 
   /* Allocate object id array and initialize. */
   objectid_arr=malloc(col_size*sizeof(*objectid_arr));
@@ -166,47 +141,13 @@ create_healpixmap(double *ra,
         }
     }
 
-  // i=0;
-  // /* Build a polygon array with first `ntop_objects` as a single polyon,
-  //    the next `ntop_objects` another and so on. */
-  // for(k=0; signal[k]!=0; k++)
-  //   {
-  //     // i=29126;/* For test only. */
-  //     for(j=0; j<ntop_objects; ++j)
-  //     {
-  //       size_t ii = most_bright[(size_t)signal[k]].object_id[j];
-  //       temp_polygon[j*2]=ra[ii];
-  //       temp_polygon[j*2+1]=dec[ii];
-  //       // printf("temp_polygon = \t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
-  //     }
-
-  //     gal_polygon_vertices_sort(temp_polygon, ntop_objects, ordinds);
-
-  //     for(j=0; j<ntop_objects; ++j)
-  //     {
-  //       // printf("ordinds %f\n", signal[k]);
-  //       polygon[i*2]=temp_polygon[ordinds[j]*2];
-  //       polygon[i*2+1]=temp_polygon[ordinds[j]*2+1];
-  //       // printf("sorted polygon = %f, %f\n", polygon[i*2], polygon[i*2+1]);
-  //       i++;
-  //     }
-  //   }
-
-  // *npolygon=i;
 
   /* Make/Write a healpix of the magnitude data. Interpolates
       missing values. */
   write_healpix_map(signal, nside, "healpix-test.fits", 0, "C");
 
-  // /* Create a ds9 file for visualisation. */
-  // make_regionfile("polygon.reg", *npolygon, polygon);
-
   /* Free refernce data. */
   free(objectid_arr);
-  // free(signal);
-  // free(most_bright);
-  // free(temp_polygon);
-  // free(ordinds);
 }
 
 
@@ -441,9 +382,6 @@ int main(){
   // printf("%ld\n", npolygon);
 
   make_healpix_polygons(c1, c2, c3, signal, ref->dsize[0], most_bright, 5, &npolygon, polygon);
-
-  /* Create a ds9 file for visualisation. */
-  // make_regionfile("polygon.reg", npolygon, polygon);
 
   make_dist_array(polygon, npolygon, nside);
 
