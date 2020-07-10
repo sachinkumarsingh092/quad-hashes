@@ -36,141 +36,6 @@ struct quad_candidate
 
 
 
-/* Make the healpix map using the RA and DEC table columns. 
-   Ensure RA and DEC are in degree. If not convert them. */
-void
-create_healpixmap(double *ra,
-                  double *dec,
-                  float  *magnitude,
-                  size_t col_size,
-                  size_t ntop_objects,
-                  long   nside,
-                  size_t *npolygon,
-                  float *polygon)
-{
-  float *signal=NULL;
-  size_t *ordinds=NULL;
-  size_t i=0, j=0, k=0;
-  double *temp_polygon=NULL;
-  size_t *objectid_arr=NULL;
-  struct Map *most_bright=NULL;
-  long ipring, maxipring=LONG_MIN, minipring=LONG_MAX;
-
-
-  /* Allocate the arrays to use the ordinnds arry to store the
-     indexes and the temp_polygon array to store the points
-     to be sorted while sorting the polygons. */
-  ordinds=malloc(col_size*ntop_objects*sizeof(*ordinds));
-
-  temp_polygon=malloc(col_size*2*ntop_objects*sizeof(*temp_polygon));
-
-  /* Allocate the columns in the map whcih is same as
-      total no of HEALpixes. */
-  most_bright=malloc(col_size*sizeof(*most_bright));
-
-  for(i=0;i<col_size;i++)
-    {
-      for(j=0;j<ntop_objects;j++)
-            most_bright[i].object_id[j]=0;
-
-      most_bright[i].size=0;
-    }
-
-
-  /* Allocate signal array. */
-  signal=malloc(col_size*sizeof(*signal));
-
-  /* Allocate object id array and initialize. */
-  objectid_arr=malloc(col_size*sizeof(*objectid_arr));
-  for(i=0;i<col_size; ++i)
-    objectid_arr[i]=i;
-
-
-  /* Use brightness column as a reference to sort object id array
-      in incresing order.  */
-  gal_qsort_index_single=magnitude;
-  qsort(objectid_arr, col_size, sizeof(size_t), gal_qsort_index_single_float32_d);
-
-
-  /* Allocate size for most bright array containing
-      5 most brightest start brightness where index of array is
-      the ring index no. of the HEALPix and the value is the size/index
-      of the columns and their value at that size/index */
-
-  for(i=0, k=0; i<col_size; ++i)
-    {
-      double ptheta = DEG2RAD(90-dec[objectid_arr[i]]);
-      double pphi   = DEG2RAD(ra[objectid_arr[i]]);
-
-      ang2pix_ring(nside, ptheta, pphi, &ipring);
-      // printf("ring = %ld\n", ipring);
-
-      if(maxipring < ipring) maxipring = ipring;
-      if(minipring > ipring) minipring = ipring;
-
-
-      if(most_bright[ipring].size < ntop_objects)
-        {
-          most_bright[ipring].object_id[most_bright[ipring].size] = i;
-          
-          /* If even 1 star is present, use it's id in map formation. */
-          if(most_bright[ipring].size == 0)
-            signal[k++]=(float)ipring;
-
-
-          // printf("ring-index = %ld, size = %ld, object-index = %ld \n",
-          //                         ipring
-          //                         , most_bright[ipring].size+1
-          //                         , most_bright[ipring].object_id[most_bright[ipring].size]);
-
-          most_bright[ipring].size++; /* Increase the size of the array. */
-        }
-    }
-  
-  // printf("max = %zu , min = %zu\n", maxipring, minipring);
-
-  i=0;
-  /* Build a polygon array with first `ntop_objects` as a single polyon,
-     the next `ntop_objects` another and so on. */
-  for(k=0; signal[k]!=0; k++)
-    {
-      // i=29126;/* For test only. */
-      for(j=0; j<ntop_objects; ++j)
-      {
-        size_t ii = most_bright[(size_t)signal[k]].object_id[j];
-        temp_polygon[j*2]=ra[ii];
-        temp_polygon[j*2+1]=dec[ii];
-        // printf("temp_polygon = \t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
-      }
-
-      gal_polygon_vertices_sort(temp_polygon, ntop_objects, ordinds);
-
-      for(j=0; j<ntop_objects; ++j)
-      {
-        // printf("ordinds %f\n", signal[k]);
-        polygon[i*2]=temp_polygon[ordinds[j]*2];
-        polygon[i*2+1]=temp_polygon[ordinds[j]*2+1];
-        // printf("sorted polygon = %f, %f\n", polygon[i*2], polygon[i*2+1]);
-        i++;
-      }
-    }
-  
-  *npolygon=i;
-
-  /* Make/Write a healpix of the magnitude data. Interpolates
-      missing values. */
-  write_healpix_map(signal, nside, "healpix-test.fits", 0, "C");
-
-
-  /* Free refernce data. */
-  free(objectid_arr);
-  free(signal);
-  free(most_bright);
-  free(temp_polygon);
-  free(ordinds);
-}
-
-
 
 
 
@@ -184,7 +49,7 @@ make_regionfile(char *filename,
   size_t i=0,j=0, n=0;
 
   fileptr = fopen(filename, "w+");
-  
+
   fprintf(fileptr, "# Region file format: DS9 version 4.1\n");
   fprintf(fileptr, "global color=green dashlist=8 3 width=1 "
                     "font=\"helvetica 10 normal roman\" select=1 "
@@ -213,6 +78,197 @@ make_regionfile(char *filename,
 
 
 
+/* Make the healpix map using the RA and DEC table columns.
+   Ensure RA and DEC are in degree. If not convert them. */
+void
+create_healpixmap(double *ra,
+                  double *dec,
+                  float  *magnitude,
+                  size_t col_size,
+                  size_t ntop_objects,
+                  long   nside,
+                  struct Map *most_bright,
+                  float *signal)
+{
+  long ipring;
+  // float *signal=NULL;
+  size_t *ordinds=NULL;
+  size_t i=0, j=0, k=0;
+  double *temp_polygon=NULL;
+  size_t *objectid_arr=NULL;
+  // struct Map *most_bright=NULL;
+
+
+  /* Allocate the arrays to use the ordinnds arry to store the
+     indexes and the temp_polygon array to store the points
+     to be sorted while sorting the polygons. */
+  // ordinds=malloc(col_size*ntop_objects*sizeof(*ordinds));
+
+  // temp_polygon=malloc(col_size*2*ntop_objects*sizeof(*temp_polygon));
+
+  // /* Allocate the columns in the map whcih is same as
+  //     total no of HEALpixes. */
+  // most_bright=malloc(col_size*sizeof(*most_bright));
+
+  // for(i=0;i<col_size;i++)
+  //   {
+  //     for(j=0;j<ntop_objects;j++)
+  //           most_bright[i].object_id[j]=0;
+
+  //     most_bright[i].size=0;
+  //   }
+
+
+  // /* Allocate signal array. */
+  // signal=malloc(col_size*sizeof(*signal));
+
+  /* Allocate object id array and initialize. */
+  objectid_arr=malloc(col_size*sizeof(*objectid_arr));
+  for(i=0;i<col_size; ++i)
+    objectid_arr[i]=i;
+
+
+  /* Use brightness column as a reference to sort object id array
+      in incresing order.  */
+  gal_qsort_index_single=magnitude;
+  qsort(objectid_arr, col_size, sizeof(size_t), gal_qsort_index_single_float32_d);
+
+
+  /* Allocate size for most bright array containing
+      5 most brightest start brightness where index of array is
+      the ring index no. of the HEALPix and the value is the size/index
+      of the columns and their value at that size/index */
+
+  for(i=0, k=0; i<col_size; ++i)
+    {
+      double ptheta = DEG2RAD(90-dec[objectid_arr[i]]);
+      double pphi   = DEG2RAD(ra[objectid_arr[i]]);
+
+      ang2pix_ring(nside, ptheta, pphi, &ipring);
+      // printf("ring = %ld\n", ipring);
+
+
+      if(most_bright[ipring].size < ntop_objects)
+        {
+          most_bright[ipring].object_id[most_bright[ipring].size] = i;
+
+          /* If even 1 star is present, use it's id in map formation. */
+          if(most_bright[ipring].size == 0)
+            signal[k++]=(float)ipring;
+
+
+          printf("ring-index = %ld, size = %ld, object-index = %ld \n",
+                                  ipring
+                                  , most_bright[ipring].size+1
+                                  , most_bright[ipring].object_id[most_bright[ipring].size]);
+
+          most_bright[ipring].size++; /* Increase the size of the array. */
+        }
+    }
+
+  // i=0;
+  // /* Build a polygon array with first `ntop_objects` as a single polyon,
+  //    the next `ntop_objects` another and so on. */
+  // for(k=0; signal[k]!=0; k++)
+  //   {
+  //     // i=29126;/* For test only. */
+  //     for(j=0; j<ntop_objects; ++j)
+  //     {
+  //       size_t ii = most_bright[(size_t)signal[k]].object_id[j];
+  //       temp_polygon[j*2]=ra[ii];
+  //       temp_polygon[j*2+1]=dec[ii];
+  //       // printf("temp_polygon = \t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
+  //     }
+
+  //     gal_polygon_vertices_sort(temp_polygon, ntop_objects, ordinds);
+
+  //     for(j=0; j<ntop_objects; ++j)
+  //     {
+  //       // printf("ordinds %f\n", signal[k]);
+  //       polygon[i*2]=temp_polygon[ordinds[j]*2];
+  //       polygon[i*2+1]=temp_polygon[ordinds[j]*2+1];
+  //       // printf("sorted polygon = %f, %f\n", polygon[i*2], polygon[i*2+1]);
+  //       i++;
+  //     }
+  //   }
+
+  // *npolygon=i;
+
+  /* Make/Write a healpix of the magnitude data. Interpolates
+      missing values. */
+  write_healpix_map(signal, nside, "healpix-test.fits", 0, "C");
+
+  // /* Create a ds9 file for visualisation. */
+  // make_regionfile("polygon.reg", *npolygon, polygon);
+
+  /* Free refernce data. */
+  free(objectid_arr);
+  // free(signal);
+  // free(most_bright);
+  // free(temp_polygon);
+  // free(ordinds);
+}
+
+
+
+
+void
+make_healpix_polygons(double *ra,
+                      double *dec,
+                      float  *magnitude,
+                      float *signal,
+                      size_t col_size,
+                      struct Map *most_bright,
+                      size_t ntop_objects,
+                      size_t *npolygon,
+                      float *polygon)
+{
+  size_t i=0,j=0,k=0;
+  size_t *ordinds=NULL;
+  double *temp_polygon=NULL;
+
+  /* Allocate the arrays to use the ordinnds arry to store the
+   indexes and the temp_polygon array to store the points
+   to be sorted while sorting the polygons. */
+  ordinds=malloc(col_size*ntop_objects*sizeof(*ordinds));
+
+  temp_polygon=malloc(col_size*2*ntop_objects*sizeof(*temp_polygon));
+
+
+  /* Build a polygon array with first `ntop_objects` as a single polyon,
+     the next `ntop_objects` another and so on. */
+  for(k=0; signal[k]!=0; k++)
+    {
+      // i=29126;/* For test only. */
+      for(j=0; j<ntop_objects; ++j)
+      {
+        size_t ii = most_bright[(size_t)signal[k]].object_id[j];
+        temp_polygon[j*2]=ra[ii];
+        temp_polygon[j*2+1]=dec[ii];
+        // printf("temp_polygon = \t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
+      }
+
+      gal_polygon_vertices_sort(temp_polygon, ntop_objects, ordinds);
+
+      for(j=0; j<ntop_objects; ++j)
+      {
+        // printf("ordinds %f\n", signal[k]);
+        polygon[i*2]=temp_polygon[ordinds[j]*2];
+        polygon[i*2+1]=temp_polygon[ordinds[j]*2+1];
+        // printf("sorted polygon = %f, %f\n", polygon[i*2], polygon[i*2+1]);
+        i++;
+      }
+    }
+
+  *npolygon=i;
+
+   /* Create a ds9 file for visualisation. */
+  make_regionfile("polygon.reg", *npolygon, polygon);
+
+  free(ordinds);
+  free(temp_polygon);
+}
+
 
 
 
@@ -231,14 +287,15 @@ sort_compare(const void *a, const void *b)
 
 
 
-void 
+void
 make_dist_array(float *polygon,
                 size_t npolygon,
                 long nside)
 {
-  double dist;
+  double dist_sq;
   size_t i, j, k;
   double theta_pix;
+  size_t nquad_arr=0;
   struct quad_candidate *quad_array=NULL;
 
   quad_array=malloc(npolygon*sizeof(*quad_array));
@@ -254,34 +311,39 @@ make_dist_array(float *polygon,
   theta_pix=(180/M_PI)*sqrt(M_PI/3)/nside; /* IN degrees. */
   // printf("theta_pix = %lf\n", theta_pix);
 
-  /*TODO
+  /* TODO
     The below algorithm will take a lot of time and space, O(n^2).
-    Use heaps instead, O(lon(n)).*/
+    Use heaps instead, O(log(n)).*/
 
   for(i=0; i<npolygon; ++i)
     {
+      nquad_arr=0;
+
       for(j=0; j<npolygon; ++j)
         {
-          dist=(polygon[2*j]-polygon[2*i])*(polygon[2*j]-polygon[2*i])
+          dist_sq=(polygon[2*j]-polygon[2*i])*(polygon[2*j]-polygon[2*i])
                 + (polygon[2*j+1]-polygon[2*i+1])*(polygon[2*j+1]-polygon[2*i+1]);
-          
-          if(dist <= theta_pix && quad_array[i].times_used < 16)
+
+          if(dist_sq <= theta_pix && dist_sq!=0 && quad_array[i].times_used < 16)
             {
               quad_array[j].x=polygon[2*j];
               quad_array[j].y=polygon[2*j+1];
-              quad_array[j].distance=dist;
+              quad_array[j].distance=dist_sq;
               quad_array[j].times_used++;
               // printf("%lf, %lf, %lf, %zu\n", quad_array[j].x,
               //                                quad_array[j].y,
               //                                quad_array[j].distance,
-              //                                quad_array[j].times_used); 
+              //                                quad_array[j].times_used);
 
+              nquad_arr++;
             }
         }
 
-      qsort(quad_array, npolygon, sizeof(struct quad_candidate), sort_compare);
+      printf("%ld\n", nquad_arr);
 
-      for(k=0;k<npolygon;++k)
+      qsort(quad_array, nquad_arr, sizeof(struct quad_candidate), sort_compare);
+
+      for(k=0;k<nquad_arr;++k)
         if(quad_array[k].distance != 0)
           printf("%lf, %lf, %lf, %zu\n", quad_array[k].x,
                                          quad_array[k].y,
@@ -289,6 +351,8 @@ make_dist_array(float *polygon,
                                          quad_array[k].times_used);
 
       printf("======== next star =======\n");
+
+
 
       for(j=0; j<npolygon; ++j)
         {
@@ -304,17 +368,20 @@ make_dist_array(float *polygon,
 }
 
 
-
+// void
+// make_quads()
 
 
 int main(){
   long nside=64;
   float *polygon;
+  size_t i=0, j=0;
   size_t npolygon=0;
-  // size_t i=0, k=0;
-  // struct Map *most_bright=NULL;
-  // float *signal=NULL;
+  float *signal=NULL;
+  struct Map *most_bright=NULL;
   // size_t *objectid_arr=NULL;
+
+
 
 
   /* Choose columns to read. */
@@ -348,20 +415,42 @@ int main(){
   double *c2=dec->array;
   float  *c3=mag->array;
 
+  /* Allocate the columns in the map whcih is same as
+    total no of HEALpixes. */
+  most_bright=malloc(ref->dsize[0]*sizeof(*most_bright));
+  for(i=0;i<ref->dsize[0];i++)
+  {
+    for(j=0;j<5;j++)
+          most_bright[i].object_id[j]=0;
+
+    most_bright[i].size=0;
+  }
+
+
+  /* Allocate signal array. */
+  signal=malloc(ref->dsize[0]*sizeof(*signal));
+
+
   /* Allocate space for the polygon array. */
   polygon=malloc(ref->dsize[0]*sizeof(*polygon));
 
-  /* Make a HEALPix map. OPtimal value of nside is used according to 
+  /* Make a HEALPix map. OPtimal value of nside is used according to
      users requirement. */
-  create_healpixmap(c1, c2, c3, ref->dsize[0], 5, nside, &npolygon, polygon);
+  create_healpixmap(c1, c2, c3, ref->dsize[0], 5, nside, most_bright, signal);
+
+  // printf("%ld\n", npolygon);
+
+  make_healpix_polygons(c1, c2, c3, signal, ref->dsize[0], most_bright, 5, &npolygon, polygon);
 
   /* Create a ds9 file for visualisation. */
-  make_regionfile("polygon.reg", npolygon, polygon);
+  // make_regionfile("polygon.reg", npolygon, polygon);
 
   make_dist_array(polygon, npolygon, nside);
 
   /* Free and return. */
+  free(signal);
   free(polygon);
+  free(most_bright);
   gal_list_data_free (ref);
 
   return 0;
