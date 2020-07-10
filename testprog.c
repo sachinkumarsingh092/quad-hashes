@@ -26,10 +26,18 @@ struct Map
 
 
 
+struct polygon_obj
+{
+  double x,y;
+  float brightness;
+};
+
+
 struct quad_candidate
 {
   double x, y;
   double distance;
+  float brightness;
   size_t times_used;
 };
 
@@ -61,7 +69,6 @@ make_regionfile(char *filename,
       if(polygon[j*2] != 0 && polygon[j*2+1]!=0)
         {
           fprintf(fileptr, "polygon(");
-          // i=29126;/* For test only.*/
             for(n=0; n<5; ++n)
             {
               if(j%5==0) fprintf(fileptr, "%lf,%lf", polygon[j*2], polygon[j*2+1]);
@@ -132,10 +139,10 @@ create_healpixmap(double *ra,
             signal[k++]=(float)ipring;
 
 
-          printf("ring-index = %ld, size = %ld, object-index = %ld \n",
-                                  ipring
-                                  , most_bright[ipring].size+1
-                                  , most_bright[ipring].object_id[most_bright[ipring].size]);
+          // printf("ring-index = %ld, size = %ld, object-index = %ld \n",
+          //                         ipring
+          //                         , most_bright[ipring].size+1
+          //                         , most_bright[ipring].object_id[most_bright[ipring].size]);
 
           most_bright[ipring].size++; /* Increase the size of the array. */
         }
@@ -162,10 +169,11 @@ make_healpix_polygons(double *ra,
                       struct Map *most_bright,
                       size_t ntop_objects,
                       size_t *npolygon,
-                      float *polygon)
+                      struct polygon_obj *polygon)
 {
-  size_t i=0,j=0,k=0;
   size_t *ordinds=NULL;
+  size_t i=0,j=0,k=0,ii=0;
+  float *polygon_plot=NULL;
   double *temp_polygon=NULL;
 
   /* Allocate the arrays to use the ordinnds arry to store the
@@ -175,28 +183,35 @@ make_healpix_polygons(double *ra,
 
   temp_polygon=malloc(col_size*2*ntop_objects*sizeof(*temp_polygon));
 
+  polygon_plot=malloc(col_size*sizeof(*polygon_plot));
+
 
   /* Build a polygon array with first `ntop_objects` as a single polyon,
      the next `ntop_objects` another and so on. */
   for(k=0; signal[k]!=0; k++)
     {
-      // i=29126;/* For test only. */
       for(j=0; j<ntop_objects; ++j)
       {
-        size_t ii = most_bright[(size_t)signal[k]].object_id[j];
+        ii = most_bright[(size_t)signal[k]].object_id[j];
         temp_polygon[j*2]=ra[ii];
         temp_polygon[j*2+1]=dec[ii];
-        // printf("temp_polygon = \t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
+        // printf("temp_polygon  = \t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
       }
 
       gal_polygon_vertices_sort(temp_polygon, ntop_objects, ordinds);
 
       for(j=0; j<ntop_objects; ++j)
       {
+        ii=most_bright[(size_t)signal[k]].object_id[j];
+        
+        polygon[i].x=temp_polygon[ordinds[j]*2];
+        polygon[i].y=temp_polygon[ordinds[j]*2+1];
+        polygon[i].brightness=magnitude[ii];
+
         // printf("ordinds %f\n", signal[k]);
-        polygon[i*2]=temp_polygon[ordinds[j]*2];
-        polygon[i*2+1]=temp_polygon[ordinds[j]*2+1];
-        // printf("sorted polygon = %f, %f\n", polygon[i*2], polygon[i*2+1]);
+        polygon_plot[i*2]=temp_polygon[ordinds[j]*2];
+        polygon_plot[i*2+1]=temp_polygon[ordinds[j]*2+1];
+        // printf("sorted polygon = %lf, %lf, %f\n", polygon[i].x, polygon[i].y, polygon[i].brightness);
         i++;
       }
     }
@@ -204,8 +219,9 @@ make_healpix_polygons(double *ra,
   *npolygon=i;
 
    /* Create a ds9 file for visualisation. */
-  make_regionfile("polygon.reg", *npolygon, polygon);
+  make_regionfile("polygon.reg", *npolygon, polygon_plot);
 
+  free(polygon_plot);
   free(ordinds);
   free(temp_polygon);
 }
@@ -229,14 +245,14 @@ sort_compare(const void *a, const void *b)
 
 
 void
-make_dist_array(float *polygon,
+make_dist_array(struct polygon_obj *polygon,
                 size_t npolygon,
                 long nside)
 {
   double dist_sq;
-  size_t i, j, k;
   double theta_pix;
   size_t nquad_arr=0;
+  size_t i=0, j=0, k=0;
   struct quad_candidate *quad_array=NULL;
 
   quad_array=malloc(npolygon*sizeof(*quad_array));
@@ -246,6 +262,7 @@ make_dist_array(float *polygon,
       quad_array[i].x=0;
       quad_array[i].y=0;
       quad_array[i].distance=0;
+      quad_array[i].brightness=0;
       quad_array[i].times_used=0;
     }
 
@@ -258,24 +275,30 @@ make_dist_array(float *polygon,
 
   for(i=0; i<npolygon; ++i)
     {
+      /* Using k starts the array form 0 rather than any value on j
+         would satisfy(maybe somewhere in the middle of pollygon array for some j)*/
+      k=0;
       nquad_arr=0;
 
       for(j=0; j<npolygon; ++j)
         {
-          dist_sq=(polygon[2*j]-polygon[2*i])*(polygon[2*j]-polygon[2*i])
-                + (polygon[2*j+1]-polygon[2*i+1])*(polygon[2*j+1]-polygon[2*i+1]);
+          /* distance^2 = x*x+y*y */
+          dist_sq=(polygon[j].x-polygon[i].x)*(polygon[j].x-polygon[i].x)
+                + (polygon[j].y-polygon[i].y)*(polygon[j].y-polygon[i].y);
 
           if(dist_sq <= theta_pix && dist_sq!=0 && quad_array[i].times_used < 16)
             {
-              quad_array[j].x=polygon[2*j];
-              quad_array[j].y=polygon[2*j+1];
-              quad_array[j].distance=dist_sq;
-              quad_array[j].times_used++;
-              // printf("%lf, %lf, %lf, %zu\n", quad_array[j].x,
-              //                                quad_array[j].y,
-              //                                quad_array[j].distance,
-              //                                quad_array[j].times_used);
-
+              quad_array[k].x=polygon[j].x;
+              quad_array[k].y=polygon[j].y;
+              quad_array[k].brightness=polygon[j].brightness;
+              quad_array[k].distance=dist_sq;
+              quad_array[k].times_used++;
+              // printf("%lf, %lf, %f, %lf, %zu\n", quad_array[k].x,
+              //                                quad_array[k].y,
+              //                                quad_array[k].brightness,
+              //                                quad_array[k].distance,
+              //                                quad_array[k].times_used);
+              k++;
               nquad_arr++;
             }
         }
@@ -284,21 +307,21 @@ make_dist_array(float *polygon,
 
       qsort(quad_array, nquad_arr, sizeof(struct quad_candidate), sort_compare);
 
-      for(k=0;k<nquad_arr;++k)
-        if(quad_array[k].distance != 0)
-          printf("%lf, %lf, %lf, %zu\n", quad_array[k].x,
-                                         quad_array[k].y,
-                                         quad_array[k].distance,
-                                         quad_array[k].times_used);
+      for(j=0;j<nquad_arr;++j)
+        if(quad_array[j].distance != 0)
+          printf("%lf, %lf, %f, %lf, %zu\n", quad_array[j].x,
+                                             quad_array[j].y,
+                                             quad_array[j].brightness,
+                                             quad_array[j].distance,
+                                             quad_array[j].times_used);
 
       printf("======== next star =======\n");
-
-
 
       for(j=0; j<npolygon; ++j)
         {
           quad_array[j].x=0;
           quad_array[j].y=0;
+          quad_array[j].brightness=0;
           quad_array[j].distance=0;
           quad_array[j].times_used=0;
         }
@@ -315,11 +338,11 @@ make_dist_array(float *polygon,
 
 int main(){
   long nside=64;
-  float *polygon;
   size_t i=0, j=0;
   size_t npolygon=0;
   float *signal=NULL;
   struct Map *most_bright=NULL;
+  struct polygon_obj *polygon=NULL;
   // size_t *objectid_arr=NULL;
 
 
@@ -374,20 +397,27 @@ int main(){
 
   /* Allocate space for the polygon array. */
   polygon=malloc(ref->dsize[0]*sizeof(*polygon));
+  for(i=0;i<ref->dsize[0];++i)
+    {
+      polygon[i].x=0;
+      polygon[i].y=0;
+      polygon[i].brightness=0;
+    }
+
 
   /* Make a HEALPix map. OPtimal value of nside is used according to
      users requirement. */
   create_healpixmap(c1, c2, c3, ref->dsize[0], 5, nside, most_bright, signal);
 
-  // printf("%ld\n", npolygon);
-
   make_healpix_polygons(c1, c2, c3, signal, ref->dsize[0], most_bright, 5, &npolygon, polygon);
+
+  // printf("%ld\n", npolygon);
 
   make_dist_array(polygon, npolygon, nside);
 
   /* Free and return. */
-  free(signal);
   free(polygon);
+  free(signal);
   free(most_bright);
   gal_list_data_free (ref);
 
