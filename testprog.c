@@ -51,7 +51,8 @@ struct quad_candidate
 void
 make_regionfile(char *filename,
                 size_t npolygon,
-                float *polygon)
+                float *polygon,
+                size_t npoints)
 {
   FILE *fileptr;
   size_t i=0,j=0, n=0;
@@ -64,17 +65,17 @@ make_regionfile(char *filename,
                     "highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 "
                     "include=1 source=1\n");
   fprintf(fileptr, "fk5\n");
-  for(i=0; i<npolygon/5; ++i)
+  for(i=0; i<npolygon/npoints; ++i)
     {
-      if(polygon[j*2] != 0 && polygon[j*2+1]!=0)
+      if(polygon[j*2]!=0 && polygon[j*2+1]!=0)
         {
           fprintf(fileptr, "polygon(");
-            for(n=0; n<5; ++n)
-            {
-              if(j%5==0) fprintf(fileptr, "%lf,%lf", polygon[j*2], polygon[j*2+1]);
-              else       fprintf(fileptr, ",%lf,%lf", polygon[j*2], polygon[j*2+1]);
-              ++j;
-            }
+            for(n=0; n<npoints; ++n)
+              {
+                if(j%npoints==0) fprintf(fileptr, "%lf,%lf", polygon[j*2], polygon[j*2+1]);
+                else             fprintf(fileptr, ",%lf,%lf", polygon[j*2], polygon[j*2+1]);
+                ++j;
+              }
           fprintf(fileptr, ")\n");
         }
     }
@@ -98,9 +99,7 @@ create_healpixmap(double *ra,
                   float *signal)
 {
   long ipring;
-  size_t *ordinds=NULL;
   size_t i=0, j=0, k=0;
-  double *temp_polygon=NULL;
   size_t *objectid_arr=NULL;
 
 
@@ -216,10 +215,11 @@ make_healpix_polygons(double *ra,
       }
     }
 
+  /* No of points in polygon. */
   *npolygon=i;
 
    /* Create a ds9 file for visualisation. */
-  make_regionfile("polygon.reg", *npolygon, polygon_plot);
+  make_regionfile("polygon.reg", *npolygon, polygon_plot, ntop_objects);
 
   free(polygon_plot);
   free(ordinds);
@@ -228,9 +228,9 @@ make_healpix_polygons(double *ra,
 
 
 
-
+/* Sort in ascending order. */
 static int
-sort_compare(const void *a, const void *b)
+sort_distance(const void *a, const void *b)
 {
   struct quad_candidate *p1 = (struct quad_candidate *)a;
   struct quad_candidate *p2 = (struct quad_candidate *)b;
@@ -242,21 +242,35 @@ sort_compare(const void *a, const void *b)
 
 
 
+static int
+sort_brightness(const void *a, const void *b)
+{
+  struct quad_candidate *p1 = (struct quad_candidate *)a;
+  struct quad_candidate *p2 = (struct quad_candidate *)b;
+
+  return ( p1->brightness==p2->brightness
+           ? 0
+           : (p1->brightness<p2->brightness ? -1 : 1) );
+}
+
 
 
 void
 make_dist_array(struct polygon_obj *polygon,
+                size_t col_size,
                 size_t npolygon,
                 long nside)
 {
   double dist_sq;
   double theta_pix;
   size_t nquad_arr=0;
-  size_t i=0, j=0, k=0;
+  size_t nquads_num=0;
+  size_t i=0, j=0, k=0, b_ind=0;
+  float *brightness_arr_plot=NULL;
   struct quad_candidate *quad_array=NULL;
+  struct quad_candidate brightsorted_quad[4]={0};
 
   quad_array=malloc(npolygon*sizeof(*quad_array));
-
   for(i=0;i<npolygon;i++)
     {
       quad_array[i].x=0;
@@ -265,6 +279,8 @@ make_dist_array(struct polygon_obj *polygon,
       quad_array[i].brightness=0;
       quad_array[i].times_used=0;
     }
+  
+  brightness_arr_plot=malloc(col_size*sizeof(*brightness_arr_plot));
 
   theta_pix=(180/M_PI)*sqrt(M_PI/3)/nside; /* IN degrees. */
   // printf("theta_pix = %lf\n", theta_pix);
@@ -305,17 +321,56 @@ make_dist_array(struct polygon_obj *polygon,
 
       printf("%ld\n", nquad_arr);
 
-      qsort(quad_array, nquad_arr, sizeof(struct quad_candidate), sort_compare);
+      /* Sort them on basis of distance and take the n, n-2, n-4 stars. */
+      qsort(quad_array, nquad_arr, sizeof(struct quad_candidate), sort_distance);
 
-      for(j=0;j<nquad_arr;++j)
-        if(quad_array[j].distance != 0)
-          printf("%lf, %lf, %f, %lf, %zu\n", quad_array[j].x,
-                                             quad_array[j].y,
-                                             quad_array[j].brightness,
-                                             quad_array[j].distance,
-                                             quad_array[j].times_used);
+      if(nquad_arr >= 6)
+        {
+          brightsorted_quad[0] = quad_array[nquad_arr-1]; 
+          brightsorted_quad[1] = quad_array[nquad_arr-3];
+          brightsorted_quad[2] = quad_array[nquad_arr-5];
+          brightsorted_quad[3] = quad_array[0];
 
-      printf("======== next star =======\n");
+          nquads_num++;
+        }
+      // else
+      //   {
+      //     // error(EXIT_FAILURE, 0, "%s: Need atleast 6 points for a quad. ",
+      //     //                         __func__,  PACKAGE_BUGREPORT);
+      //     // exit(0);
+      //     printf("error\n");
+      //   }
+      
+
+      /* Sort according to brightness. */
+      qsort(brightsorted_quad, 4, sizeof(struct quad_candidate), sort_brightness);
+
+      // for(j=0;j<nquad_arr;++j)
+      //   if(quad_array[j].distance != 0)
+          // printf("%lf, %lf, %f, %lf, %zu\n", quad_array[j].x,
+          //                                    quad_array[j].y,
+          //                                    quad_array[j].brightness,
+          //                                    quad_array[j].distance,
+          //                                    quad_array[j].times_used);
+      
+      for(j=0; j<4 && nquad_arr>=6; ++j)
+        {
+          brightness_arr_plot[2*b_ind]=brightsorted_quad[j].x;
+          brightness_arr_plot[2*b_ind+1]=brightsorted_quad[j].y;
+
+          // printf("%lf, %lf, %f, %lf, %zu\n", brightsorted_quad[j].x,
+          //                                    brightsorted_quad[j].y,
+          //                                    brightsorted_quad[j].brightness,
+          //                                    brightsorted_quad[j].distance,
+          //                                    brightsorted_quad[j].times_used);
+          
+          printf("brightness_arr_plot = %ld %lf %lf\n",j, brightness_arr_plot[2*b_ind],
+                                                    brightness_arr_plot[2*b_ind+1]);
+          b_ind++;
+        }
+
+      /* Take n, n-2, n-4 stars and sort them according to brightness. */
+
 
       for(j=0; j<npolygon; ++j)
         {
@@ -325,8 +380,18 @@ make_dist_array(struct polygon_obj *polygon,
           quad_array[j].distance=0;
           quad_array[j].times_used=0;
         }
+    
     }
+  
+  /* Total number of quads. */
+  printf("number of quad = %zu\n", nquads_num);
 
+  /* If quad needs to be sorted in point orger sort them using polygon sort.*/
+
+  /* Plot for check. */
+  make_regionfile("final-quads.reg", nquads_num, brightness_arr_plot, 4);
+
+  free(brightness_arr_plot);
   free(quad_array);
 
 }
@@ -411,9 +476,9 @@ int main(){
 
   make_healpix_polygons(c1, c2, c3, signal, ref->dsize[0], most_bright, 5, &npolygon, polygon);
 
-  // printf("%ld\n", npolygon);
+  // printf("npolygon = %ld\n", npolygon);
 
-  make_dist_array(polygon, npolygon, nside);
+  make_dist_array(polygon, ref->dsize[0], npolygon, nside);
 
   /* Free and return. */
   free(polygon);
