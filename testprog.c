@@ -302,7 +302,7 @@ make_dist_array(struct polygon_obj *polygon,
           dist_sq=(polygon[j].x-polygon[i].x)*(polygon[j].x-polygon[i].x)
                 + (polygon[j].y-polygon[i].y)*(polygon[j].y-polygon[i].y);
 
-          if(dist_sq <= theta_pix && dist_sq!=0 && quad_array[i].times_used < 16)
+          if(dist_sq <= theta_pix && quad_array[i].times_used < 16)
             {
               quad_array[k].x=polygon[j].x;
               quad_array[k].y=polygon[j].y;
