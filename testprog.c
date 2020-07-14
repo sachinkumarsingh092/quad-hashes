@@ -14,6 +14,7 @@
 
 # define M_PI		    3.14159265358979323846	/* Somehow M_PI is not working. */
 # define DEG2RAD(d) (d)*M_PI/180
+# define RAD2DEG(d) (d)*180/M_PI
 
 
 
@@ -47,25 +48,29 @@ struct quad_candidate
 
 
 
-/* Make a ds9 complatiable region file. Internal use only. */
+/* Make a ds9 complatiable region file. Internal use only. 
+   Rename it to gal_polygon_to_ds9reg. Give color argument.*/
 void
-make_regionfile(char *filename,
+gal_polygon_to_ds9reg(char *filename,
                 size_t npolygon,
                 float *polygon,
-                size_t npoints)
+                size_t npoints,
+                char *color)
 {
   FILE *fileptr;
   size_t i=0,j=0, n=0;
 
+  if (!color) color = "green";
+
   fileptr = fopen(filename, "w+");
 
   fprintf(fileptr, "# Region file format: DS9 version 4.1\n");
-  fprintf(fileptr, "global color=green dashlist=8 3 width=1 "
+  fprintf(fileptr, "global color=%s dashlist=8 3 width=1 "
                     "font=\"helvetica 10 normal roman\" select=1 "
                     "highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 "
-                    "include=1 source=1\n");
+                    "include=1 source=1\n", color);
   fprintf(fileptr, "fk5\n");
-  for(i=0; i<npolygon/npoints; ++i)
+  for(i=0; i<npolygon; ++i) 
     {
       if(polygon[j*2]!=0 && polygon[j*2+1]!=0)
         {
@@ -96,9 +101,10 @@ create_healpixmap(double *ra,
                   size_t ntop_objects,
                   long   nside,
                   struct Map *most_bright,
-                  float *signal)
+                  float *healpix_id)
 {
   long ipring;
+  float *healpix_polygon=NULL;
   size_t i=0, j=0, k=0;
   size_t *objectid_arr=NULL;
 
@@ -108,6 +114,7 @@ create_healpixmap(double *ra,
   for(i=0;i<col_size; ++i)
     objectid_arr[i]=i;
 
+  healpix_polygon=malloc(col_size*sizeof(*healpix_polygon));
 
   /* Use brightness column as a reference to sort object id array
       in incresing order.  */
@@ -126,8 +133,11 @@ create_healpixmap(double *ra,
       double pphi   = DEG2RAD(ra[objectid_arr[i]]);
 
       ang2pix_ring(nside, ptheta, pphi, &ipring);
-      // printf("ring = %ld\n", ipring);
 
+      // make a function to find center of healpix.
+      double theta, phi;
+      double rc, dc;
+      double theta_pix=(180/M_PI)*sqrt(3/M_PI)/nside;
 
       if(most_bright[ipring].size < ntop_objects)
         {
@@ -135,7 +145,30 @@ create_healpixmap(double *ra,
 
           /* If even 1 star is present, use it's id in map formation. */
           if(most_bright[ipring].size == 0)
-            signal[k++]=(float)ipring;
+            {
+              healpix_id[k]=(float)ipring;
+
+              pix2ang_ring(nside, ipring, &theta, &phi);
+
+              rc = RAD2DEG(phi);
+              dc = 90-RAD2DEG(theta);
+
+              printf("ra = %g, dec = %g\n", rc, dc);
+
+              healpix_polygon[8*k]   = rc;
+              healpix_polygon[8*k+1] = dc-theta_pix/2;
+
+              healpix_polygon[8*k+2] = rc-theta_pix/2;
+              healpix_polygon[8*k+3] = dc;
+
+              healpix_polygon[8*k+4] = rc;
+              healpix_polygon[8*k+5] = dc+theta_pix/2;
+
+              healpix_polygon[8*k+6] = rc+theta_pix/2;
+              healpix_polygon[8*k+7] = dc;
+
+              k++;
+            }
 
 
           // printf("ring-index = %ld, size = %ld, object-index = %ld \n",
@@ -144,15 +177,19 @@ create_healpixmap(double *ra,
           //                         , most_bright[ipring].object_id[most_bright[ipring].size]);
 
           most_bright[ipring].size++; /* Increase the size of the array. */
+        
         }
     }
+    
+  gal_polygon_to_ds9reg("healpix-diamond.reg", k*4, healpix_polygon, 4, "red");
 
 
   /* Make/Write a healpix of the magnitude data. Interpolates
       missing values. */
-  write_healpix_map(signal, nside, "healpix-test.fits", 0, "C");
+  write_healpix_map(healpix_id, nside, "healpix-test.fits", 0, "C");
 
   /* Free refernce data. */
+  free(healpix_polygon);
   free(objectid_arr);
 }
 
@@ -163,7 +200,7 @@ void
 make_healpix_polygons(double *ra,
                       double *dec,
                       float  *magnitude,
-                      float *signal,
+                      float *healpix_id,
                       size_t col_size,
                       struct Map *most_bright,
                       size_t ntop_objects,
@@ -187,11 +224,12 @@ make_healpix_polygons(double *ra,
 
   /* Build a polygon array with first `ntop_objects` as a single polyon,
      the next `ntop_objects` another and so on. */
-  for(k=0; signal[k]!=0; k++)
+  for(k=0; healpix_id[k]!=0; k++)
     {
+      // printf("healpix id = %g\n", healpix_id[k]);
       for(j=0; j<ntop_objects; ++j)
       {
-        ii = most_bright[(size_t)signal[k]].object_id[j];
+        ii = most_bright[(size_t)healpix_id[k]].object_id[j];
         temp_polygon[j*2]=ra[ii];
         temp_polygon[j*2+1]=dec[ii];
         // printf("temp_polygon  = \t%lf %lf\n", temp_polygon[j*2], temp_polygon[j*2+1]);
@@ -199,15 +237,17 @@ make_healpix_polygons(double *ra,
 
       gal_polygon_vertices_sort(temp_polygon, ntop_objects, ordinds);
 
+      // make index array.
+
       for(j=0; j<ntop_objects; ++j)
       {
-        ii=most_bright[(size_t)signal[k]].object_id[j];
+        ii=most_bright[(size_t)healpix_id[k]].object_id[j];
         
         polygon[i].x=temp_polygon[ordinds[j]*2];
         polygon[i].y=temp_polygon[ordinds[j]*2+1];
         polygon[i].brightness=magnitude[ii];
 
-        // printf("ordinds %f\n", signal[k]);
+        // printf("ordinds %f\n", healpix_id[k]);
         polygon_plot[i*2]=temp_polygon[ordinds[j]*2];
         polygon_plot[i*2+1]=temp_polygon[ordinds[j]*2+1];
         // printf("sorted polygon = %lf, %lf, %f\n", polygon[i].x, polygon[i].y, polygon[i].brightness);
@@ -215,11 +255,11 @@ make_healpix_polygons(double *ra,
       }
     }
 
-  /* No of points in polygon. */
+  /* No of polygon. */
   *npolygon=i;
 
    /* Create a ds9 file for visualisation. */
-  make_regionfile("polygon.reg", *npolygon, polygon_plot, ntop_objects);
+  gal_polygon_to_ds9reg("polygon.reg", *npolygon, polygon_plot, ntop_objects, "red");
 
   free(polygon_plot);
   free(ordinds);
@@ -282,7 +322,7 @@ make_dist_array(struct polygon_obj *polygon,
   
   brightness_arr_plot=malloc(col_size*sizeof(*brightness_arr_plot));
 
-  theta_pix=(180/M_PI)*sqrt(M_PI/3)/nside; /* IN degrees. */
+  theta_pix=(180/M_PI)*sqrt(3/M_PI)/nside; /* IN degrees. */
   // printf("theta_pix = %lf\n", theta_pix);
 
   /* TODO
@@ -300,8 +340,11 @@ make_dist_array(struct polygon_obj *polygon,
         {
           /* distance^2 = x*x+y*y */
           dist_sq=(polygon[j].x-polygon[i].x)*(polygon[j].x-polygon[i].x)
-                + (polygon[j].y-polygon[i].y)*(polygon[j].y-polygon[i].y);
+                  +(polygon[j].y-polygon[i].y)*(polygon[j].y-polygon[i].y);
 
+          // if polygon[j].x <= polygon[i].x + theta_pix/2
+          // polygon[j].x > polygon[i].x - theta_pix/2
+          //    if again for y
           if(dist_sq <= theta_pix && quad_array[i].times_used < 16)
             {
               quad_array[k].x=polygon[j].x;
@@ -333,13 +376,6 @@ make_dist_array(struct polygon_obj *polygon,
 
           nquads_num++;
         }
-      // else
-      //   {
-      //     // error(EXIT_FAILURE, 0, "%s: Need atleast 6 points for a quad. ",
-      //     //                         __func__,  PACKAGE_BUGREPORT);
-      //     // exit(0);
-      //     printf("error\n");
-      //   }
       
 
       /* Sort according to brightness. */
@@ -364,8 +400,8 @@ make_dist_array(struct polygon_obj *polygon,
           //                                    brightsorted_quad[j].distance,
           //                                    brightsorted_quad[j].times_used);
           
-          printf("brightness_arr_plot = %ld %lf %lf\n",j, brightness_arr_plot[2*b_ind],
-                                                    brightness_arr_plot[2*b_ind+1]);
+          // printf("brightness_arr_plot = %ld %lf %lf\n",j, brightness_arr_plot[2*b_ind],
+          //                                           brightness_arr_plot[2*b_ind+1]);
           b_ind++;
         }
 
@@ -389,7 +425,7 @@ make_dist_array(struct polygon_obj *polygon,
   /* If quad needs to be sorted in point orger sort them using polygon sort.*/
 
   /* Plot for check. */
-  make_regionfile("final-quads.reg", nquads_num, brightness_arr_plot, 4);
+  gal_polygon_to_ds9reg("final-quads.reg", nquads_num, brightness_arr_plot, 4, "red");
 
   free(brightness_arr_plot);
   free(quad_array);
@@ -405,7 +441,7 @@ int main(){
   long nside=64;
   size_t i=0, j=0;
   size_t npolygon=0;
-  float *signal=NULL;
+  float *healpix_id=NULL;
   struct Map *most_bright=NULL;
   struct polygon_obj *polygon=NULL;
   // size_t *objectid_arr=NULL;
@@ -456,8 +492,8 @@ int main(){
   }
 
 
-  /* Allocate signal array. */
-  signal=malloc(ref->dsize[0]*sizeof(*signal));
+  /* Allocate healpix_id array. */
+  healpix_id=malloc(ref->dsize[0]*sizeof(*healpix_id));
 
 
   /* Allocate space for the polygon array. */
@@ -472,9 +508,9 @@ int main(){
 
   /* Make a HEALPix map. OPtimal value of nside is used according to
      users requirement. */
-  create_healpixmap(c1, c2, c3, ref->dsize[0], 5, nside, most_bright, signal);
+  create_healpixmap(c1, c2, c3, ref->dsize[0], 5, nside, most_bright, healpix_id);
 
-  make_healpix_polygons(c1, c2, c3, signal, ref->dsize[0], most_bright, 5, &npolygon, polygon);
+  make_healpix_polygons(c1, c2, c3, healpix_id, ref->dsize[0], most_bright, 5, &npolygon, polygon);
 
   // printf("npolygon = %ld\n", npolygon);
 
@@ -482,7 +518,7 @@ int main(){
 
   /* Free and return. */
   free(polygon);
-  free(signal);
+  free(healpix_id);
   free(most_bright);
   gal_list_data_free (ref);
 

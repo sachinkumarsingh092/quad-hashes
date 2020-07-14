@@ -9,7 +9,7 @@ LIBS := /usr/local/lib/libgnuastro.a /usr/local/lib/libchealpix.so \
 		/usr/lib/x86_64-linux-gnu/libcurl-gnutls.so -lz \
 		/usr/local/lib/libgsl.so /usr/local/lib/libgslcblas.so -lm -lc -lpthread -pthread
 
-PROGNAME := testprog
+PROGNAME := 
 SHELL := /usr/bin/env bash
 REGION := 
 
