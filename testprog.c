@@ -296,27 +296,28 @@ make_dist_array(double *ra,
       for(j=0; j<npolygon; ++j)
         {
 
-          if( polygon[j].x <= polygon[i].x + theta_pix &&
-              polygon[j].x >= polygon[i].x - theta_pix  )
+          if( polygon[j].x <= polygon[i].x + theta_pix/2 &&
+              polygon[j].x >= polygon[i].x - theta_pix/2  )
             {
-                if( polygon[j].y <= polygon[i].y + theta_pix &&
-                    polygon[j].y >= polygon[i].y - theta_pix &&
-                    quad_cand[k].times_used < 10)
+                if( polygon[j].y <= polygon[i].y + theta_pix/2 &&
+                    polygon[j].y >= polygon[i].y - theta_pix/2 &&
+                    polygon[j].times_used <= 10)
                   {
                     /* distance^2 = x*x+y*y */
-                    dist_sq=(polygon[j].x-polygon[i].x)*(polygon[j].x-polygon[i].x)
+                    dist_sq=(polygon[j].x-polygon[i].x)*(polygon[j].x-polygon[i].x )
                             +(polygon[j].y-polygon[i].y)*(polygon[j].y-polygon[i].y);
 
                     quad_cand[k].x=polygon[j].x;
                     quad_cand[k].y=polygon[j].y;
                     quad_cand[k].brightness=polygon[j].brightness;
                     quad_cand[k].distance=dist_sq;
-                    quad_cand[k].times_used++;
-                    // printf("%lf, %lf, %f, %lf, %zu\n", quad_cand[k].x,
-                    //                                quad_cand[k].y,
-                    //                                quad_cand[k].brightness,
-                    //                                quad_cand[k].distance,
-                    //                                quad_cand[k].times_used);
+                    quad_cand[k].times_used=polygon[j].times_used++;
+
+                    printf("%lf, %lf, %f, %lf, %zu\n", quad_cand[k].x,
+                                                   quad_cand[k].y,
+                                                   quad_cand[k].brightness,
+                                                   quad_cand[k].distance,
+                                                   quad_cand[k].times_used);
 
                     k++;
                     nquad_arr++;
@@ -402,7 +403,6 @@ make_dist_array(double *ra,
 int main(){
   long nside=64;
   size_t i=0, j=0;
-  size_t npolygon=0;
   float *healpix_id=NULL;
   struct Map *most_bright=NULL;
   // size_t *objectid_arr=NULL;
