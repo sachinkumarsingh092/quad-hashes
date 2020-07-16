@@ -11,8 +11,11 @@
 #include <gnuastro/statistics.h>
 
 
+# ifndef M_PI
+# define M_PI 3.14159265358979323846
+# endif
 
-# define M_PI		    3.14159265358979323846	/* Somehow M_PI is not working. */
+
 # define DEG2RAD(d) (d)*M_PI/180
 # define RAD2DEG(d) (d)*180/M_PI
 
@@ -28,6 +31,7 @@ struct Map
 
 
 
+/* For internal use only. */
 struct quad_candidate
 {
   double x, y;
@@ -42,7 +46,7 @@ struct quad_candidate
 
 
 
-/* Make a ds9 complatiable region file. Internal use only. 
+/* Make a ds9 complatiable region file. Internal use only.
    Rename it to gal_polygon_to_ds9reg. Give color argument.*/
 void
 gal_polygon_to_ds9reg(char *filename,
@@ -64,7 +68,7 @@ gal_polygon_to_ds9reg(char *filename,
                     "highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 "
                     "include=1 source=1\n", color);
   fprintf(fileptr, "fk5\n");
-  for(i=0; i<npolygon; ++i) 
+  for(i=0; i<npolygon; ++i)
     {
       if(polygon[j*2]!=0 && polygon[j*2+1]!=0)
         {
@@ -147,7 +151,7 @@ create_healpixmap(double *ra,
               rc = RAD2DEG(phi);
               dc = 90-RAD2DEG(theta);
 
-              printf("ra = %g, dec = %g\n", rc, dc);
+              // printf("ra = %g, dec = %g\n", rc, dc);
 
               healpix_polygon[8*k]   = rc;
               healpix_polygon[8*k+1] = dc-theta_pix/2;
@@ -171,7 +175,7 @@ create_healpixmap(double *ra,
           //                         , most_bright[ipring].object_id[most_bright[ipring].size]);
 
           most_bright[ipring].size++; /* Increase the size of the array. */
-        
+
         }
     }
 
@@ -185,7 +189,6 @@ create_healpixmap(double *ra,
   free(healpix_polygon);
   free(objectid_arr);
 }
-
 
 
 
@@ -205,6 +208,8 @@ sort_distance(const void *a, const void *b)
 
 
 
+
+
 static int
 sort_brightness(const void *a, const void *b)
 {
@@ -218,8 +223,99 @@ sort_brightness(const void *a, const void *b)
 
 
 
+
+double
+find_angleA0B(double Ax, double Ay, double Bx, double By, double Ox, double Oy)
+{
+  double dir_O_to_A=0, dir_O_to_B=0, angleAOB=0;
+
+  dir_O_to_A = atan2(Ay - Oy, Ax - Ox);
+  dir_O_to_B = atan2(By - Oy, Bx - Ox);
+  angleAOB = dir_O_to_A - dir_O_to_B;
+
+  /* atan2 returns anngle between [-pi, +pi] radians.
+     Convert it [0, 360] degrees. */
+  angleAOB = RAD2DEG(angleAOB);
+
+  return angleAOB>=0
+         ? angleAOB
+         : angleAOB+360;
+}
+
+
+
+
+
+/* Make the final hash codes using angle between line AB and AC and AD.
+   Finally return a array of size 4 cotaining the code - {Cx, Cy, Dx, Dy}.
+   Also, after this the quads will be sorted by brightness, so this
+   further removes redundencies. */
+double*
+make_hash_codes(struct quad_candidate brightsorted_quad[4], double hash_code[4])
+{
+  double scale=0;
+  double angle_CAB=0, angle_DAB=0;
+  double mag_AB=0, mag_AC=0, mag_AD=0;
+
+
+  /* First calculate the angles and add and subtract 45 degrees to make it
+     in frame with the current coordinate system with AB as its angle
+     bisector. */
+  angle_CAB=find_angleA0B(brightsorted_quad[1].x, brightsorted_quad[1].y,
+                          brightsorted_quad[0].x, brightsorted_quad[0].y,
+                          brightsorted_quad[3].x, brightsorted_quad[3].y);
+
+
+  angle_DAB=find_angleA0B(brightsorted_quad[2].x, brightsorted_quad[2].y,
+                          brightsorted_quad[0].x, brightsorted_quad[0].y,
+                          brightsorted_quad[3].x, brightsorted_quad[3].y);
+
+
+  /* Make a scaled-down value for the new coordinate system. We want that
+                |AB|=1, and hence scale = 1/|AB|
+     where |AB|=sqrt(|AB.x|^2+|AB.y|^2).
+     This value can be used to scale-down the other distaces mainly,
+     AC and AD. */
+  mag_AB=sqrt((brightsorted_quad[0].x-brightsorted_quad[3].x)
+              *(brightsorted_quad[0].x-brightsorted_quad[3].x)
+              +(brightsorted_quad[0].y-brightsorted_quad[3].y)
+              *(brightsorted_quad[0].y-brightsorted_quad[3].y));
+
+  scale=1/mag_AB;
+
+
+  /* Find |AC| and |AD|. Then use distance to find cos and sin thetas to
+     give x and y coordinates. */
+  mag_AC=sqrt((brightsorted_quad[1].x-brightsorted_quad[3].x)
+              *(brightsorted_quad[1].x-brightsorted_quad[3].x)
+              +(brightsorted_quad[1].y-brightsorted_quad[3].y)
+              *(brightsorted_quad[1].y-brightsorted_quad[3].y));
+
+  mag_AD=sqrt((brightsorted_quad[2].x-brightsorted_quad[3].x)
+              *(brightsorted_quad[2].x-brightsorted_quad[3].x)
+              +(brightsorted_quad[2].y-brightsorted_quad[3].y)
+              *(brightsorted_quad[2].y-brightsorted_quad[3].y));
+
+
+  /* Make the final hash-code. */
+  hash_code[0]=mag_AC*scale*cos(45+angle_CAB); /* Cx */
+  hash_code[1]=mag_AC*scale*sin(45+angle_CAB); /* Cy */
+  hash_code[2]=mag_AB*scale*cos(45-angle_DAB); /* Dx */
+  hash_code[3]=mag_AB*scale*sin(45-angle_DAB); /* Dy */
+
+  return hash_code;
+}
+
+
+
+
+
+/* Make the quads. For each quads, we first sort them on the basis
+   of distance from each star, check the no of times the stars have been
+   used does not exceed a certain number and then we sort them on the basis
+   of brightness.*/
 void
-make_dist_array(double *ra,
+make_possible_quads(double *ra,
                 double *dec,
                 float  *magnitude,
                 size_t ntop_objects,
@@ -238,7 +334,7 @@ make_dist_array(double *ra,
   size_t i=0, j=0, k=0, b_ind=0, ii=0;
   struct quad_candidate *quad_cand=NULL;
   struct quad_candidate brightsorted_quad[4]={0};
-  
+
   brightness_arr_plot=malloc(col_size*sizeof(*brightness_arr_plot));
 
   /* Allocate space for the polygon array. */
@@ -300,8 +396,7 @@ make_dist_array(double *ra,
               polygon[j].x >= polygon[i].x - theta_pix/2  )
             {
                 if( polygon[j].y <= polygon[i].y + theta_pix/2 &&
-                    polygon[j].y >= polygon[i].y - theta_pix/2 &&
-                    polygon[j].times_used <= 10)
+                    polygon[j].y >= polygon[i].y - theta_pix/2 )
                   {
                     /* distance^2 = x*x+y*y */
                     dist_sq=(polygon[j].x-polygon[i].x)*(polygon[j].x-polygon[i].x )
@@ -313,11 +408,11 @@ make_dist_array(double *ra,
                     quad_cand[k].distance=dist_sq;
                     quad_cand[k].times_used=polygon[j].times_used++;
 
-                    printf("%lf, %lf, %f, %lf, %zu\n", quad_cand[k].x,
-                                                   quad_cand[k].y,
-                                                   quad_cand[k].brightness,
-                                                   quad_cand[k].distance,
-                                                   quad_cand[k].times_used);
+                    // printf("%lf, %lf, %f, %lf, %zu\n", quad_cand[k].x,
+                    //                                quad_cand[k].y,
+                    //                                quad_cand[k].brightness,
+                    //                                quad_cand[k].distance,
+                    //                                quad_cand[k].times_used);
 
                     k++;
                     nquad_arr++;
@@ -325,33 +420,39 @@ make_dist_array(double *ra,
             }
         }
 
-      printf("%ld\n", nquad_arr);
+      // printf("%ld\n", nquad_arr);
 
       /* Sort them on basis of distance and take the n, n-2, n-4 stars. */
       qsort(quad_cand, nquad_arr, sizeof(struct quad_candidate), sort_distance);
 
       if(nquad_arr >= 6)
         {
-          brightsorted_quad[0] = quad_cand[nquad_arr-1]; 
-          brightsorted_quad[1] = quad_cand[nquad_arr-3];
-          brightsorted_quad[2] = quad_cand[nquad_arr-5];
-          brightsorted_quad[3] = quad_cand[0];
+          brightsorted_quad[0] = quad_cand[0];            /* A */
+          brightsorted_quad[1] = quad_cand[nquad_arr-5];  /* C */
+          brightsorted_quad[2] = quad_cand[nquad_arr-3];  /* D */
+          brightsorted_quad[3] = quad_cand[nquad_arr-1];  /* B */
 
           nquads_num++;
         }
-      
+
+      /* Make the hash-codes. */
+
+      for(j=0;j<4 && nquad_arr>=6;++j)
+        printf("%lf, %lf, %f, %lf, %zu\n", brightsorted_quad[j].x,
+                                           brightsorted_quad[j].y,
+                                           brightsorted_quad[j].brightness,
+                                           brightsorted_quad[j].distance,
+                                           brightsorted_quad[j].times_used);
+
+      printf("===new quad===\n");
+
+
 
       /* Sort according to brightness. */
       qsort(brightsorted_quad, 4, sizeof(struct quad_candidate), sort_brightness);
 
-      // for(j=0;j<nquad_arr;++j)
-      //   if(quad_cand[j].distance != 0)
-          // printf("%lf, %lf, %f, %lf, %zu\n", quad_cand[j].x,
-          //                                    quad_cand[j].y,
-          //                                    quad_cand[j].brightness,
-          //                                    quad_cand[j].distance,
-          //                                    quad_cand[j].times_used);
-      
+
+      /* Make the array used for plotting with ds9. */
       for(j=0; j<4 && nquad_arr>=6; ++j)
         {
           brightness_arr_plot[2*b_ind]=brightsorted_quad[j].x;
@@ -362,30 +463,31 @@ make_dist_array(double *ra,
           //                                    brightsorted_quad[j].brightness,
           //                                    brightsorted_quad[j].distance,
           //                                    brightsorted_quad[j].times_used);
-          
+
           // printf("brightness_arr_plot = %ld %lf %lf\n",j, brightness_arr_plot[2*b_ind],
           //                                           brightness_arr_plot[2*b_ind+1]);
           b_ind++;
         }
 
-      /* Take n, n-2, n-4 stars and sort them according to brightness. */
 
-
+      /* Reset the structure. */
       for(j=0; j<npolygon; ++j)
         {
           quad_cand[j].x=0;
           quad_cand[j].y=0;
           quad_cand[j].brightness=0;
           quad_cand[j].distance=0;
-          quad_cand[j].times_used=0;
+          // quad_cand[j].times_used=0;
         }
-    
+
     }
-  
+
   /* Total number of quads. */
   printf("number of quad = %zu\n", nquads_num);
 
   /* If quad needs to be sorted in point orger sort them using polygon sort.*/
+
+
 
   /* Plot for check. */
   gal_polygon_to_ds9reg("final-quads.reg", nquads_num, brightness_arr_plot, 4, "red");
@@ -451,7 +553,7 @@ int main(){
      users requirement. */
   create_healpixmap(c1, c2, c3, ref->dsize[0], 5, nside, most_bright, healpix_id);
 
-  make_dist_array(c1, c2, c3, 5, ref->dsize[0], nside, healpix_id, most_bright);
+  make_possible_quads(c1, c2, c3, 5, ref->dsize[0], nside, healpix_id, most_bright);
 
   /* Free and return. */
   free(healpix_id);

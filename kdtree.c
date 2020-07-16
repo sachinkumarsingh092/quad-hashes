@@ -4,13 +4,13 @@
 #include <math.h>
 #include <time.h>
  
-#define MAX_DIM 3
+#define MAX_DIM 4
 struct kd_node_t{
     double x[MAX_DIM];
     struct kd_node_t *left, *right;
 };
  
-    inline double
+double
 dist(struct kd_node_t *a, struct kd_node_t *b, int dim)
 {
     double t, d = 0;
@@ -20,7 +20,7 @@ dist(struct kd_node_t *a, struct kd_node_t *b, int dim)
     }
     return d;
 }
-inline void swap(struct kd_node_t *x, struct kd_node_t *y) {
+void swap(struct kd_node_t *x, struct kd_node_t *y) {
     double tmp[MAX_DIM];
     memcpy(tmp,  x->x, sizeof(tmp));
     memcpy(x->x, y->x, sizeof(tmp));
@@ -29,7 +29,7 @@ inline void swap(struct kd_node_t *x, struct kd_node_t *y) {
  
  
 /* see quickselect method */
-    struct kd_node_t*
+struct kd_node_t*
 find_median(struct kd_node_t *start, struct kd_node_t *end, int idx)
 {
     if (end <= start) return NULL;
@@ -60,7 +60,7 @@ find_median(struct kd_node_t *start, struct kd_node_t *end, int idx)
     }
 }
  
-    struct kd_node_t*
+struct kd_node_t*
 make_tree(struct kd_node_t *t, int len, int i, int dim)
 {
     struct kd_node_t *n;
@@ -112,22 +112,22 @@ int main(void)
 {
     int i;
     struct kd_node_t wp[] = {
-        {{2, 3}}, {{5, 4}}, {{9, 6}}, {{4, 7}}, {{8, 1}}, {{7, 2}}
+        {{2, 3, 1, 4}}, {{5, 4, 2, 2}}, {{9, 6, 5, 3}}, {{4, 7, 2, 2}}, {{8, 1, 2, 4}}, {{7, 2, 1, 4}}
     };
-    struct kd_node_t testNode = {{9, 6}};
+    struct kd_node_t testNode = {{9, 6, 1, 4}};
     struct kd_node_t *root, *found, *million;
     double best_dist;
  
-    root = make_tree(wp, sizeof(wp) / sizeof(wp[1]), 0, 2);
+    root = make_tree(wp, sizeof(wp) / sizeof(wp[1]), 0, 4);
  
     visited = 0;
     found = 0;
-    nearest(root, &testNode, 0, 2, &found, &best_dist);
+    nearest(root, &testNode, 0, 4, &found, &best_dist);
  
-    printf(">> WP tree\nsearching for (%g, %g)\n"
-            "found (%g, %g) dist %g\nseen %d nodes\n\n",
-            testNode.x[0], testNode.x[1],
-            found->x[0], found->x[1], sqrt(best_dist), visited);
+    printf(">> WP tree\nsearching for (%g, %g, %g, %g)\n"
+            "found (%g, %g, %g, %g) dist %g\nseen %d nodes\n\n",
+            testNode.x[0], testNode.x[1],testNode.x[2], testNode.x[3],
+            found->x[0], found->x[1],found->x[2], found->x[3], sqrt(best_dist), visited);
  
     million =(struct kd_node_t*) calloc(N, sizeof(struct kd_node_t));
     srand(time(0));
@@ -167,7 +167,7 @@ int main(void)
             "visited %d nodes for %d random findings (%f per lookup)\n",
             sum, test_runs, sum/(double)test_runs);
  
-    // free(million);
+    free(million);
  
     return 0;
 }
