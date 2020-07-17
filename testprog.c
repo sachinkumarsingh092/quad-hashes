@@ -270,6 +270,8 @@ make_hash_codes(struct quad_candidate brightsorted_quad[4], double hash_code[4])
                           brightsorted_quad[0].x, brightsorted_quad[0].y,
                           brightsorted_quad[3].x, brightsorted_quad[3].y);
 
+  printf("angle_CAB = %g, angle_DAB = %g\n", angle_CAB, angle_DAB);
+
 
   /* Make a scaled-down value for the new coordinate system. We want that
                 |AB|=1, and hence scale = 1/|AB|
@@ -300,8 +302,8 @@ make_hash_codes(struct quad_candidate brightsorted_quad[4], double hash_code[4])
   /* Make the final hash-code. */
   hash_code[0]=mag_AC*scale*cos(45+angle_CAB); /* Cx */
   hash_code[1]=mag_AC*scale*sin(45+angle_CAB); /* Cy */
-  hash_code[2]=mag_AB*scale*cos(45-angle_DAB); /* Dx */
-  hash_code[3]=mag_AB*scale*sin(45-angle_DAB); /* Dy */
+  hash_code[2]=mag_AD*scale*cos(45-angle_DAB); /* Dx */
+  hash_code[3]=mag_AD*scale*sin(45-angle_DAB); /* Dy */
 
   return hash_code;
 }
@@ -436,13 +438,17 @@ make_possible_quads(double *ra,
         }
 
       /* Make the hash-codes. */
+      double hash_code[4]={0};
+      double *ptr=make_hash_codes(brightsorted_quad, hash_code);
+      if(ptr)
+        printf("%g, %g, %g, %g\n", ptr[0], ptr[1], ptr[2], ptr[3]);
 
-      for(j=0;j<4 && nquad_arr>=6;++j)
-        printf("%lf, %lf, %f, %lf, %zu\n", brightsorted_quad[j].x,
-                                           brightsorted_quad[j].y,
-                                           brightsorted_quad[j].brightness,
-                                           brightsorted_quad[j].distance,
-                                           brightsorted_quad[j].times_used);
+      // for(j=0;j<4 && nquad_arr>=6;++j)
+      //   printf("%lf, %lf, %f, %lf, %zu\n", brightsorted_quad[j].x,
+      //                                      brightsorted_quad[j].y,
+      //                                      brightsorted_quad[j].brightness,
+      //                                      brightsorted_quad[j].distance,
+      //                                      brightsorted_quad[j].times_used);
 
       printf("===new quad===\n");
 
