@@ -1,0 +1,6 @@
+*.fits
+testprog
+a.out
+*.reg
+.vscode/
+kdtree
