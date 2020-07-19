@@ -279,7 +279,8 @@ int main()
   cx[4]=8; cy[4]=1; dx[4]=2; dy[4]=4;
   cx[5]=7; cy[5]=2; dx[5]=1; dy[5]=4;
 
-
+  /* Calling the high-level kd-tree function to generate the left and
+     right columns. */
   kdtree=gal_data_kdtree_create(Cx);
 
   return 0;

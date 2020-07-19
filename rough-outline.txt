@@ -13,7 +13,7 @@ OUTPUT OF QUAD CALCULATION (8 columns).
 MULTI-THREADED
 
 Steps:
- 1) find healpixs
+ 1) NO HEALPIX(!) Just grid the range of RA/DEC in relative box sizes (5x5).
  2) 5 brightest stars in each healpix (10 healpixes = 50 stars (max) = 50 quads (max))
  -----muti-threaded-----
  3) for each star, look in a circle the radius of the healpix.
@@ -54,3 +54,29 @@ OUTPUT OF KD-TREE (index in OUTPUT of QUAD CALCULATION)
 
 WHAT GETS WRITTEN TO A FILE:
 Cx, Cy, Dx, Dy, Rel-Bright, left, right, star-A-index, star-B-index, star-C-index, star-D-index
+
+
+
+
+
+
+
+
+
+=======================================
+Matching with inidividual catalogs
+=======================================
+
+1) Load the necessary tables:
+    1) Reference catalog (RA, Dec, Mag)
+    2) kd-tree and quad tables (11 columns)
+    3) Catalog to-match (X, Y, Mag).
+
+2) Find all quads in to-match catalog.
+   Divide the full X,Y range in each dimension into N boxs (maybe 5x5).
+
+3) Find all the quads and a match with the kd-tree (in parallel).
+
+4) Now we know the (X,Y) ---> (RA,Dec) for random points in input catalog.
+   4.1) Fit a distortional model onto this tranformation.
+   4.2) And this will give us the WCS!
