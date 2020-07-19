@@ -210,16 +210,9 @@ nearest_neighbour(struct kd_node *root, struct kd_node *point, size_t current_ax
 
 
 
-
-int main()
+void
+kdtree_old(gal_data_t *columns)
 {
-  double least_dist;
-  struct kd_node *root=NULL, *nearest=NULL;
-  struct kd_node testNode = {{9, 6, 1, 4}};
-
-  struct kd_node tree[] = {
-      {{2, 3, 1, 4}}, {{5, 4, 2, 2}}, {{9, 6, 5, 3}}, {{4, 7, 2, 2}}, {{8, 1, 2, 4}}, {{7, 2, 1, 4}}
-  };
 
   root = make_tree(tree, sizeof(tree) / sizeof(tree[1]), 0, 4);
 
@@ -231,6 +224,63 @@ int main()
           testNode.point[0], testNode.point[1],testNode.point[2], testNode.point[3],
           nearest->point[0], nearest->point[1],nearest->point[2], nearest->point[3], sqrt(least_dist), visited);
 
+
+}
+
+
+
+gal_data_t *
+gal_data_kdtree_create(gal_data_t *columns)
+{
+  size_t numnodes=columns->size;
+  size_t ndim=gal_list_data_number(columns);
+
+  /* Allocate the output columns */
+  gal_data_t *left=gal_data_alloc(NULL, GAL_TYPE_UINT32, 1, &numnodes,
+				  NULL, 0, -1, 1, NULL, NULL, NULL);
+  gal_data_t *right=gal_data_alloc(NULL, GAL_TYPE_UINT32, 1, &numnodes,
+				   NULL, 0, -1, 1, NULL, NULL, NULL);
+  left->next=right;
+
+
+  /* Add rest of analysis from this point..... */
+}
+
+
+
+
+int main()
+{
+  gal_data_t *kdtree;
+  size_t num_points=6;
+  gal_data_t *Cx=gal_data_alloc(NULL, GAL_TYPE_FLOAT64, 1, &num_points,
+				NULL, 0, -1, 1, NULL, NULL, NULL);
+  gal_data_t *Cy=gal_data_alloc(NULL, GAL_TYPE_FLOAT64, 1, &num_points,
+				NULL, 0, -1, 1, NULL, NULL, NULL);
+  gal_data_t *Dx=gal_data_alloc(NULL, GAL_TYPE_FLOAT64, 1, &num_points,
+				NULL, 0, -1, 1, NULL, NULL, NULL);
+  gal_data_t *Dy=gal_data_alloc(NULL, GAL_TYPE_FLOAT64, 1, &num_points,
+				NULL, 0, -1, 1, NULL, NULL, NULL);
+  Cx->next=Cy;
+  Cy->next=Dx;
+  Dx->next=Dy;
+  Dy->next=NULL;
+
+  /* This is just for a small demo, in reality these values are
+     written by the library */
+  double *cx=Cx->array;
+  double *cy=Cy->array;
+  double *dx=Dx->array;
+  double *dy=Dy->array;
+  cx[0]=2; cy[0]=3; dx[0]=1; dy[0]=4;
+  cx[1]=5; cy[1]=4; dx[1]=2; dy[1]=2;
+  cx[2]=9; cy[2]=6; dx[2]=5; dy[2]=3;
+  cx[3]=4; cy[3]=7; dx[3]=2; dy[3]=2;
+  cx[4]=8; cy[4]=1; dx[4]=2; dy[4]=4;
+  cx[5]=7; cy[5]=2; dx[5]=1; dy[5]=4;
+
+
+  kdtree=gal_data_kdtree_create(Cx);
 
   return 0;
 }
