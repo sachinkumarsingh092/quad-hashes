@@ -1,0 +1,56 @@
+INPUT TO QUAD CALCULATION:
+star-RA      star-Dec          star-Mag
+1            1                 1
+1            1                 1
+1            1                 1
+1            1                 1
+
+
+
+
+
+OUTPUT OF QUAD CALCULATION (8 columns).
+MULTI-THREADED
+
+Steps:
+ 1) find healpixs
+ 2) 5 brightest stars in each healpix (10 healpixes = 50 stars (max) = 50 quads (max))
+ -----muti-threaded-----
+ 3) for each star, look in a circle the radius of the healpix.
+ 3.1) find N, N-2, N-4 most distant stars within that circle.
+      Also account for big difference in brightness (larger than error).
+ 3.2) Calculate the quad hashes for that star.
+ -----------------------
+                                                                       EXAMPLE
+ Brightness component:    (position of star A in sorted quad stars)      3
+                          (position of star B in sorted quad stars)      2
+			  (position of star C in sorted quad stars)      0  (brightest: lowest numerical magnitude value)
+			  (position of star D in sorted quad stars)      1  (next brightest)
+    Through a 4*4 bit unsigned integer and bit-shifting.
+
+ Cx       Cy        Dx        Dy        Rel-Bright    star-A-index    star-B-index    star-C-index    star-D-index
+ (doule)  (double)  (double)  (double)  (uint16_t)    (uint64_t)      (uint64_t)      (uint64_t)      (uint64_t)
+ 1        1         1         1         1               i               i
+ 1        1         1         1         1               i               i
+ 1        1         1         1         1               i               i
+ 1        1         1         1         1               i               i
+
+
+
+
+
+INPUT TO KD-TREE:   Cx, Cy, Dx, Dy
+OUTPUT OF KD-TREE (index in OUTPUT of QUAD CALCULATION)
+ left       right
+ (size_t)  (size_t)
+ x          x
+ x          x
+ x          x
+ x          x
+
+
+
+
+
+WHAT GETS WRITTEN TO A FILE:
+Cx, Cy, Dx, Dy, Rel-Bright, left, right, star-A-index, star-B-index, star-C-index, star-D-index
