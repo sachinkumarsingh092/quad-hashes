@@ -2,6 +2,11 @@
 #include <math.h>
 #include "kdtree.h"
 
+#include <gnuastro/data.h>
+#include <gnuastro/type.h>
+
+
+
 
 
 
